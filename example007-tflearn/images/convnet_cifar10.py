@@ -36,6 +36,9 @@ img_aug = ImageAugmentation()
 img_aug.add_random_flip_leftright()
 img_aug.add_random_rotation(max_angle=25.)
 
+# config
+tflearn.init_graph(set_seed=8888, num_cores=4, gpu_memory_fraction=0.3)
+
 # Convolutional network building
 network = input_data(shape=[None, 32, 32, 3],
                      data_preprocessing=img_prep,
@@ -56,3 +59,4 @@ network = regression(network, optimizer='adam',
 model = tflearn.DNN(network, tensorboard_verbose=0)
 model.fit(X, Y, n_epoch=50, shuffle=True, validation_set=(X_test, Y_test),
           show_metric=True, batch_size=96, run_id='cifar10_cnn')
+model.save('tflearn_cifar10_cnn.model')
