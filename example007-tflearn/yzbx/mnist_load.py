@@ -43,7 +43,15 @@ network = regression(network, optimizer='adam', learning_rate=0.01,
                      loss='categorical_crossentropy', name='target')
 
 # Training
-model = tflearn.DNN(network, tensorboard_verbose=0)
-model.fit({'input': X}, {'target': Y}, n_epoch=20,
-           validation_set=({'input': testX}, {'target': testY}),
-           snapshot_step=100, show_metric=True, run_id='convnet_mnist')
+
+try:
+    model = tflearn.DNN(network, tensorboard_verbose=0,
+    checkpoint_path='/tmp/tflearn/checkpoint_path',
+    best_checkpoint_path='/tmp/tflearn/best_checkpoint_path')
+    model.load('/tmp/tflearn/checkpoint_path-900')
+    model.fit({'input': X}, {'target': Y}, n_epoch=20,
+               validation_set=({'input': testX}, {'target': testY}),
+               snapshot_step=100, show_metric=True, run_id='yzbx_convnet_mnist_load')
+except KeyboardInterrupt:
+    print('save model '+'.'*60);
+    model.save('/tmp/tflearn/convnet_mnist_load_ctrl_c_model')
