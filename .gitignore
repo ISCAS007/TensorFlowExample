@@ -1,0 +1,10 @@
+*.index
+*.data-*
+*.meta
+*.pyc
+example007-tflearn/images/17flowers/
+example007-tflearn/images/checkpoint
+example007-tflearn/images/cifar-10-batches-py/
+example007-tflearn/images/mnist/
+example007-tflearn/images/tflearn_logs/
+

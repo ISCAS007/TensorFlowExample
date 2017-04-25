@@ -37,7 +37,7 @@ img_aug.add_random_flip_leftright()
 img_aug.add_random_rotation(max_angle=25.)
 
 # config
-tflearn.init_graph(set_seed=8888, num_cores=4, gpu_memory_fraction=0.3)
+tflearn.init_graph(seed=8888, num_cores=4, gpu_memory_fraction=0.3)
 
 # Convolutional network building
 network = input_data(shape=[None, 32, 32, 3],
