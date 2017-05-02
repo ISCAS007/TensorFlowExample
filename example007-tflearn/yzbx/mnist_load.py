@@ -26,6 +26,9 @@ X, Y, testX, testY = mnist.load_data(one_hot=True)
 X = X.reshape([-1, 28, 28, 1])
 testX = testX.reshape([-1, 28, 28, 1])
 
+# config
+tflearn.init_graph(seed=8888, num_cores=4, gpu_memory_fraction=0.3)
+
 # Building convolutional network
 network = input_data(shape=[None, 28, 28, 1], name='input')
 network = conv_2d(network, nb_filter=32, filter_size=3, activation='relu', regularizer="L2")
