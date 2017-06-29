@@ -43,7 +43,7 @@ tf.app.flags.DEFINE_string(
     'dataset_split_name', 'train', 'The name of the train/test split.')
 
 tf.app.flags.DEFINE_string(
-    'dataset_dir', '/media/sdb/CVDataset/tf-slim', 'The directory where the dataset files are stored.')
+    'dataset_dir', '/media/sdb/CVDataset/tf-slim/flowers', 'The directory where the dataset files are stored.')
 
 ############## model
 tf.app.flags.DEFINE_string(
@@ -54,9 +54,6 @@ tf.app.flags.DEFINE_integer(
     'An offset for the labels in the dataset. This flag is primarily used to '
     'evaluate the VGG and ResNet architectures which do not use a background '
     'class for the ImageNet dataset.')
-
-tf.app.flags.DEFINE_float(
-    'weight_decay', 0.00004, 'The weight decay on the model weights.')
 
 tf.app.flags.DEFINE_string(
     'preprocessing_name', None, 'The name of the preprocessing to use. If left '
@@ -130,7 +127,169 @@ tf.app.flags.DEFINE_boolean(
     'ignore_missing_vars', False,
     'When restoring a checkpoint would ignore missing variables.')
 
+tf.app.flags.DEFINE_float(
+    'num_epochs_per_decay', 2.0,
+    'Number of epochs after which learning rate decays.')
+
+######################
+# Optimization Flags #
+######################
+
+tf.app.flags.DEFINE_float(
+    'weight_decay', 0.00004, 'The weight decay on the model weights.')
+
+tf.app.flags.DEFINE_string(
+    'optimizer', 'rmsprop',
+    'The name of the optimizer, one of "adadelta", "adagrad", "adam",'
+    '"ftrl", "momentum", "sgd" or "rmsprop".')
+
+tf.app.flags.DEFINE_float(
+    'adadelta_rho', 0.95,
+    'The decay rate for adadelta.')
+
+tf.app.flags.DEFINE_float(
+    'adagrad_initial_accumulator_value', 0.1,
+    'Starting value for the AdaGrad accumulators.')
+
+tf.app.flags.DEFINE_float(
+    'adam_beta1', 0.9,
+    'The exponential decay rate for the 1st moment estimates.')
+
+tf.app.flags.DEFINE_float(
+    'adam_beta2', 0.999,
+    'The exponential decay rate for the 2nd moment estimates.')
+
+tf.app.flags.DEFINE_float('opt_epsilon', 1.0, 'Epsilon term for the optimizer.')
+
+tf.app.flags.DEFINE_float('ftrl_learning_rate_power', -0.5,
+                          'The learning rate power.')
+
+tf.app.flags.DEFINE_float(
+    'ftrl_initial_accumulator_value', 0.1,
+    'Starting value for the FTRL accumulators.')
+
+tf.app.flags.DEFINE_float(
+    'ftrl_l1', 0.0, 'The FTRL l1 regularization strength.')
+
+tf.app.flags.DEFINE_float(
+    'ftrl_l2', 0.0, 'The FTRL l2 regularization strength.')
+
+tf.app.flags.DEFINE_float(
+    'momentum', 0.9,
+    'The momentum for the MomentumOptimizer and RMSPropOptimizer.')
+
+tf.app.flags.DEFINE_float('rmsprop_decay', 0.9, 'Decay term for RMSProp.')
+
+
+tf.app.flags.DEFINE_string(
+    'learning_rate_decay_type',
+    'exponential',
+    'Specifies how the learning rate is decayed. One of "fixed", "exponential",'
+    ' or "polynomial"')
+
+tf.app.flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
+
+tf.app.flags.DEFINE_float(
+    'end_learning_rate', 0.0001,
+    'The minimal end learning rate used by a polynomial decay learning rate.')
+
+tf.app.flags.DEFINE_float(
+    'learning_rate_decay_factor', 0.94, 'Learning rate decay factor.')
+
+
 FLAGS = tf.app.flags.FLAGS
+
+
+def _configure_learning_rate(num_samples_per_epoch, global_step):
+  """Configures the learning rate.
+
+  Args:
+    num_samples_per_epoch: The number of samples in each epoch of training.
+    global_step: The global_step tensor.
+
+  Returns:
+    A `Tensor` representing the learning rate.
+
+  Raises:
+    ValueError: if
+  """
+  decay_steps = int(num_samples_per_epoch / FLAGS.batch_size *
+                    FLAGS.num_epochs_per_decay)
+  if FLAGS.sync_replicas:
+    decay_steps /= FLAGS.replicas_to_aggregate
+
+  if FLAGS.learning_rate_decay_type == 'exponential':
+    return tf.train.exponential_decay(FLAGS.learning_rate,
+                                      global_step,
+                                      decay_steps,
+                                      FLAGS.learning_rate_decay_factor,
+                                      staircase=True,
+                                      name='exponential_decay_learning_rate')
+  elif FLAGS.learning_rate_decay_type == 'fixed':
+    return tf.constant(FLAGS.learning_rate, name='fixed_learning_rate')
+  elif FLAGS.learning_rate_decay_type == 'polynomial':
+    return tf.train.polynomial_decay(FLAGS.learning_rate,
+                                     global_step,
+                                     decay_steps,
+                                     FLAGS.end_learning_rate,
+                                     power=1.0,
+                                     cycle=False,
+                                     name='polynomial_decay_learning_rate')
+  else:
+    raise ValueError('learning_rate_decay_type [%s] was not recognized',
+                     FLAGS.learning_rate_decay_type)
+
+
+def _configure_optimizer(learning_rate):
+  """Configures the optimizer used for training.
+
+  Args:
+    learning_rate: A scalar or `Tensor` learning rate.
+
+  Returns:
+    An instance of an optimizer.
+
+  Raises:
+    ValueError: if FLAGS.optimizer is not recognized.
+  """
+  if FLAGS.optimizer == 'adadelta':
+    optimizer = tf.train.AdadeltaOptimizer(
+        learning_rate,
+        rho=FLAGS.adadelta_rho,
+        epsilon=FLAGS.opt_epsilon)
+  elif FLAGS.optimizer == 'adagrad':
+    optimizer = tf.train.AdagradOptimizer(
+        learning_rate,
+        initial_accumulator_value=FLAGS.adagrad_initial_accumulator_value)
+  elif FLAGS.optimizer == 'adam':
+    optimizer = tf.train.AdamOptimizer(
+        learning_rate,
+        beta1=FLAGS.adam_beta1,
+        beta2=FLAGS.adam_beta2,
+        epsilon=FLAGS.opt_epsilon)
+  elif FLAGS.optimizer == 'ftrl':
+    optimizer = tf.train.FtrlOptimizer(
+        learning_rate,
+        learning_rate_power=FLAGS.ftrl_learning_rate_power,
+        initial_accumulator_value=FLAGS.ftrl_initial_accumulator_value,
+        l1_regularization_strength=FLAGS.ftrl_l1,
+        l2_regularization_strength=FLAGS.ftrl_l2)
+  elif FLAGS.optimizer == 'momentum':
+    optimizer = tf.train.MomentumOptimizer(
+        learning_rate,
+        momentum=FLAGS.momentum,
+        name='Momentum')
+  elif FLAGS.optimizer == 'rmsprop':
+    optimizer = tf.train.RMSPropOptimizer(
+        learning_rate,
+        decay=FLAGS.rmsprop_decay,
+        momentum=FLAGS.momentum,
+        epsilon=FLAGS.opt_epsilon)
+  elif FLAGS.optimizer == 'sgd':
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+  else:
+    raise ValueError('Optimizer [%s] was not recognized', FLAGS.optimizer)
+  return optimizer
 
 
 def _get_init_fn():
@@ -394,3 +553,4 @@ def main(_):
 
 if __name__ == '__main__':
   tf.app.run()
+
